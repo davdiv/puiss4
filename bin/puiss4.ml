@@ -8,7 +8,8 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 *)
 
-open Graphics ;;
+open Js_of_ocaml ;;
+open Graphics_js ;;
 open List ;;
 open Array ;;
 open Random ;;
@@ -21,7 +22,7 @@ let sizey=570;;
 
 
 
-(* Fonctions de base indépendantes (qui devraient déjà faire partie de CAML ! *)
+(* Fonctions de base indÃ©pendantes (qui devraient dÃ©jÃ  faire partie de CAML ! *)
 let draw_rect x y l h =
 	moveto x y ;
 	lineto (x+l) y ;
@@ -40,60 +41,57 @@ let ecrire_dans_cadre texte couleur x y larg haut =
 	moveto (x+(larg-fst(text_size texte))/2) (y+(haut-snd(text_size texte))/2);
 	draw_string texte ;;
 
-(*Système de contrôles graphiques: système réutilisable dans d'autres programmes*)
-let quitter=ref false ;;
+(*SystÃ¨me de contrÃ´les graphiques: systÃ¨me rÃ©utilisable dans d'autres programmes*)
 let rien () = () ;; (*la fonction qui ne fait rien !*)
 type ctrl={pos : (int*int) ; dim : (int*int) ; sourisdessus : unit->unit ; sourisplusdessus : unit->unit ; clicappui : unit->unit ; clicenvoi : unit->unit ; clicrelache : unit->unit} ;;
 type clavier={lettre : char ; appel : unit->unit} ;;
 let ctrlvide={pos = 0,0; dim = 0,0; sourisdessus=rien; sourisplusdessus=rien; clicappui=rien ; clicenvoi=rien ; clicrelache=rien};;
 let sourissurctrl (souris:(int*int)) (ctrl:ctrl) = ( (fst(souris)>fst(ctrl.pos)) && (snd(souris)>snd(ctrl.pos)) && (fst(souris)<(fst(ctrl.pos)+fst(ctrl.dim))) && (snd(souris)<(snd(ctrl.pos)+snd(ctrl.dim)))) ;;
 let attend listectrl listetouches =
-	let eventr=ref (wait_next_event[Poll]) and eventa=ref (wait_next_event[Poll]) and ctrlprec=ref ctrlvide in
-	quitter:=false ;
-	while (not (!quitter))
-	do
-		eventa:=!eventr; eventr:=wait_next_event[Button_down; Button_up; Key_pressed; Mouse_motion];
-		if (!eventr).keypressed then
-			for i = 0 to (vect_length(listetouches)-1) do if (!eventr).key=listetouches.(i).lettre then listetouches.(i).appel() done ; (*(print_int (int_of_char !eventr.key)) ; print_newline() );*)
-		if not (sourissurctrl ((!eventr).mouse_x,(!eventr).mouse_y) !ctrlprec) then (*si la souris a quitté la zone*)
+	let eventaButton=ref false and ctrlprec=ref ctrlvide in
+	Graphics_js.loop [Button_down; Button_up; Key_pressed; Mouse_motion] (fun eventr ->
+		if (eventr).keypressed then
+			for i = 0 to (vect_length(listetouches)-1) do if (eventr).key=listetouches.(i).lettre then listetouches.(i).appel() done ; (*(print_int (int_of_char eventr.key)) ; print_newline() );*)
+		if not (sourissurctrl ((eventr).mouse_x,(eventr).mouse_y) !ctrlprec) then (*si la souris a quittÃ© la zone*)
 		begin
 			let i = ref 0 in
-			if (!eventa).button then (!ctrlprec).clicrelache() ; (*on avertit que la souris n'appuie plus sur le bouton*)
+			if (!eventaButton) then (!ctrlprec).clicrelache() ; (*on avertit que la souris n'appuie plus sur le bouton*)
 			(!ctrlprec).sourisplusdessus() ; (*on avertit que la souris n'est plus dessus*)
-			while (!i<vect_length(listectrl) && (not (sourissurctrl ((!eventr).mouse_x,(!eventr).mouse_y) listectrl.(!i)))) (*on recherche une nouvelle zone*)
+			while (!i<vect_length(listectrl) && (not (sourissurctrl ((eventr).mouse_x,(eventr).mouse_y) listectrl.(!i)))) (*on recherche une nouvelle zone*)
 			do
 				i:= !i+1;
 			done ;
-			if !i<vect_length(listectrl) then (*on en a trouvé une*)
+			if !i<vect_length(listectrl) then (*on en a trouvÃ© une*)
 			begin
-				ctrlprec:=listectrl.(!i) ; (*elle remplace la précédente*)
+				ctrlprec:=listectrl.(!i) ; (*elle remplace la prÃ©cÃ©dente*)
 				(!ctrlprec).sourisdessus() ; (*on avertit que la souris est dessus*)
-				if (!eventr).button then (!ctrlprec).clicappui() ; (*on avertit le nouveau contrôle que la souris est appuyée*)
+				if (eventr).button then (!ctrlprec).clicappui() ; (*on avertit le nouveau contrÃ´le que la souris est appuyÃ©e*)
 			end
 			else ctrlprec:=ctrlvide;
 		end
-		else (*la souris n'a pas quitté la zone (même zone qu'avant) *)
+		else (*la souris n'a pas quittÃ© la zone (mÃªme zone qu'avant) *)
 		begin
-			if (!eventa).button && not (!eventr).button then (*bouton relâché*)
+			if (!eventaButton) && not (eventr).button then (*bouton relÃ¢chÃ©*)
 			begin
 				(!ctrlprec).clicenvoi();
 				(!ctrlprec).clicrelache()
 			end ;
-			if not (!eventa).button && (!eventr).button then (*bouton appuyé*)
+			if not (!eventaButton) && (eventr).button then (*bouton appuyÃ©*)
 				(!ctrlprec).clicappui();
 		end ;
-	done
+		eventaButton:=eventr.button;
+	)
 	;;
 
-(*Paramètres graphiques: règlages possibles suivant la configuration*)
+(*ParamÃ¨tres graphiques: rÃ¨glages possibles suivant la configuration*)
 let larg=640 ;; (*largeur de la zone de travail*)
 let haut=480 ;; (*hauteur de la zone de travail*)
-let decy=50;; (*décalage vertical depuis le haut pour que l'affichage soit optimal dès le début*)
+let decy=50;; (*dÃ©calage vertical depuis le haut pour que l'affichage soit optimal dÃ¨s le dÃ©but*)
 
-(*Paramètres graphiques calculés*)
+(*ParamÃ¨tres graphiques calculÃ©s*)
 let esp=larg*7/640 ;;
-let cigx=10;; (*abscisse du point inférieur gauche de la zone de travail*)
-let cigy=sizey-haut-decy ;; (*ordonnée du point inférieur gauche de la zone de travail*)
+let cigx=10;; (*abscisse du point infÃ©rieur gauche de la zone de travail*)
+let cigy=sizey-haut-decy ;; (*ordonnÃ©e du point infÃ©rieur gauche de la zone de travail*)
 (*Pour le plateau de jeu*)
 let hcarac = 19 ;;
 let largcases=larg*58/640 ;;
@@ -106,7 +104,7 @@ let hautcadreinfos=haut-(2*esp) ;;
 let jetonx=cigxcadreinfos+largcadreinfos/2 ;;
 let jetony=cigycadreinfos+hautcadreinfos-2*hcarac-largcases/2-esp ;;
 
-(*Dessine la zone de travail (ce qui n'est pas dans cette zone n'est pas utilisé*)
+(*Dessine la zone de travail (ce qui n'est pas dans cette zone n'est pas utilisÃ©*)
 let dessinerzone () =
 	set_color black ; draw_rect cigx cigy larg haut ; for i=1 to haut-1 do set_color (rgb 255 ((255*i)/haut) ((255*i)/haut)) ; moveto (cigx+1) (cigy+i) ; lineto (cigx+larg -1) (cigy+i) done ;;
 
@@ -127,7 +125,7 @@ let at = "@";;
 let dessinercadreinfos () =
 	ecrire_dans_cadre "Puissance 4" red (cigxcadreinfos+1) (cigycadreinfos+hautcadreinfos-2*hcarac) (largcadreinfos-1) (2*hcarac) ;
         ecrire_dans_cadre ("divde"^at^domain) red (cigxcadreinfos+1) (cigycadreinfos) (largcadreinfos-1) hcarac ;
-	ecrire_dans_cadre "Programmé par" red (cigxcadreinfos+1) (cigycadreinfos+hcarac) (largcadreinfos-1) (hcarac) ;
+	ecrire_dans_cadre "ProgrammÃ© par" red (cigxcadreinfos+1) (cigycadreinfos+hcarac) (largcadreinfos-1) (hcarac) ;
 	set_color blue ; draw_rect cigxcadreinfos cigycadreinfos largcadreinfos hautcadreinfos ;
 	dessinejeton 2
 	;;
@@ -138,7 +136,7 @@ let clignotercases couleur listecases =
 	for i = 0 to 12 do do_list (dessinercase (couleur * ((i+1) mod 2))) listecases (*; sound (([|440 ; 660 ; 880; 660|]).(i mod 4)) 100 ;*) done;;
 
 
-(*Les procédures de test s'il y a puissance 4*)
+(*Les procÃ©dures de test s'il y a puissance 4*)
 let jeuvide ()= make_matrix 7 6 0;;
 let verifpuiss4vert jeu x y =
 	let c = ref 0 and ny = ref y and jetons = ref [] in
@@ -146,26 +144,26 @@ let verifpuiss4vert jeu x y =
 	if !c>=4 then !jetons else [];;
 let verifpuiss4horiz jeu x y =
 	let c = ref 0 and nx = ref x and jetons = ref [] in
-	(* on compte d'abord à gauche*)
+	(* on compte d'abord Ã  gauche*)
 	while !nx>=0 && jeu.(!nx).(y) = jeu.(x).(y) do jetons:= (!nx,y):: (!jetons) ; c:= !c+1 ; nx:= !nx-1 done;
-	(* puis à droite*)
+	(* puis Ã  droite*)
 	nx:= x+1 ;
 	while !nx<=6 && jeu.(!nx).(y) = jeu.(x).(y) do jetons:= (!nx,y):: (!jetons) ; c:= !c+1 ; nx:= !nx+1 done;
 	if !c>=4 then !jetons else [];;
 let verifpuiss4diagHBGD jeu x y =
 	let c = ref 0 and nx = ref x and ny = ref y and jetons = ref [] in
-	(* on compte d'abord à gauche*)
+	(* on compte d'abord Ã  gauche*)
 	while !nx>=0 && !ny<=5 && jeu.(!nx).(!ny) = jeu.(x).(y) do jetons:= (!nx,!ny):: (!jetons) ; c:= !c+1 ; nx:= !nx-1; ny:= !ny+1 done;
-	(* puis à droite*)
+	(* puis Ã  droite*)
 	nx:= x+1 ;
 	ny:= y-1 ;
 	while !nx<=6 && !ny>=0 && jeu.(!nx).(!ny) = jeu.(x).(y) do jetons:= (!nx,!ny):: (!jetons) ; c:= !c+1 ; nx:= !nx+1; ny:= !ny-1 done;
 	if !c>=4 then !jetons else [];;
 let verifpuiss4diagBHGD jeu x y =
 	let c = ref 0 and nx = ref x and ny = ref y and jetons = ref [] in
-	(* on compte d'abord à gauche*)
+	(* on compte d'abord Ã  gauche*)
 	while !nx>=0 && !ny>=0 && jeu.(!nx).(!ny) = jeu.(x).(y) do jetons:= (!nx,!ny):: (!jetons) ; c:= !c+1 ; nx:= !nx-1; ny:= !ny-1 done;
-	(* puis à droite*)
+	(* puis Ã  droite*)
 	nx:= x+1 ;
 	ny:= y+1 ;
 	while !nx<=6 && !ny<=5 && jeu.(!nx).(!ny) = jeu.(x).(y) do jetons:= (!nx,!ny):: (!jetons) ; c:= !c+1 ; nx:= !nx+1; ny:= !ny+1 done;
@@ -182,28 +180,28 @@ let copiejeu jeu =
 	let nouvjeu = jeuvide () in
 	for x = 0 to 6 do for y = 0 to 5 do nouvjeu.(x).(y)<-jeu.(x).(y) done done; nouvjeu ;;
 
-type evalcoup = {colonne : int ; (*numéro de la colonne où on joue*)
-                  joueur : int ; (*indique si le coup est joué par les jaunes (2) ou les rouges (1) *)
+type evalcoup = {colonne : int ; (*numÃ©ro de la colonne oÃ¹ on joue*)
+                  joueur : int ; (*indique si le coup est jouÃ© par les jaunes (2) ou les rouges (1) *)
             couppossible : bool ; (*indique si le coup est possible (false si colonne pleine) *)
-                profeval : int ; (*indique la profondeur d'évaluation effectuée (nombre de coups jusqu'à la fin si finpartie=true) *)
-               finpartie : bool (*true si l'évaluation mène à une fin de partie, le signe de notefinale est positif si joueur gagne et négatif si perd, notefinale=0 si partie nulle*) ;
+                profeval : int ; (*indique la profondeur d'Ã©valuation effectuÃ©e (nombre de coups jusqu'Ã  la fin si finpartie=true) *)
+               finpartie : bool (*true si l'Ã©valuation mÃ¨ne Ã  une fin de partie, le signe de notefinale est positif si joueur gagne et nÃ©gatif si perd, notefinale=0 si partie nulle*) ;
               notefinale : int ;
-            noteposition : int (*prend la somme des notes des positions jusqu'à profeval*)
+            noteposition : int (*prend la somme des notes des positions jusqu'Ã  profeval*)
 } ;;
 
 
 let gagne a = (a.finpartie && (a.notefinale > 0));;
 let perd a = (a.finpartie && (a.notefinale < 0));;
-(*comparaison de deux coups: se place selon le pt de vue de a.joueur supposé égal à b.joueur*)
+(*comparaison de deux coups: se place selon le pt de vue de a.joueur supposÃ© Ã©gal Ã  b.joueur*)
 let eststrictementmeilleurque a b =
-	if not a.couppossible then false (*un coup impossible ne peut pas être strictement meilleur qu'un coup quelconque*)
+	if not a.couppossible then false (*un coup impossible ne peut pas Ãªtre strictement meilleur qu'un coup quelconque*)
 	else if not b.couppossible then true (*si b impossible et a possible alors le coup possible est mieux*)
 	else begin
 		if (gagne a) && (gagne b) then (*les deux coups remportent la victoire: on prend le plus rapide ou le plus joli*)
 			(a.profeval < b.profeval) || ((a.profeval = b.profeval) && (a.notefinale > b.notefinale))
 		else if (gagne a) && not (gagne b) then true
 		else if (gagne b) && not (gagne a) then false
-		else if (perd a) && (perd b) then (*les deux coups donnent la défaite: on prend la plus lente et la moins jolie*)
+		else if (perd a) && (perd b) then (*les deux coups donnent la dÃ©faite: on prend la plus lente et la moins jolie*)
 			(a.profeval > b.profeval) || ((a.profeval = b.profeval) && (a.notefinale > b.notefinale))
 		else if (perd a) && not (perd b) then false
 		else if (perd b) && not (perd a) then true
@@ -216,40 +214,40 @@ let eststrictementmeilleurque a b =
 
 let remonteeval ncol eval valpos =
 	    {colonne = ncol ;
-              joueur = 1 + (eval.joueur mod 2) ; (*le joueur change à chaque fois*)
+              joueur = 1 + (eval.joueur mod 2) ; (*le joueur change Ã  chaque fois*)
         couppossible = eval.couppossible ;
-            profeval = eval.profeval + 1 ; (*la profondeur est augmentée de 1*)
+            profeval = eval.profeval + 1 ; (*la profondeur est augmentÃ©e de 1*)
            finpartie = eval.finpartie;
-          notefinale = -eval.notefinale ; (*on prend l'opposé des évaluations pour changer de point de vue*)
+          notefinale = -eval.notefinale ; (*on prend l'opposÃ© des Ã©valuations pour changer de point de vue*)
         noteposition = valpos} ;;
 
-(*Les procédures d'évaluation d'une position*)
+(*Les procÃ©dures d'Ã©valuation d'une position*)
 let evalposvert jeu x y =
 	let c = ref 0 and d = ref 0 and ny = ref y in
 	while !ny>=0 && (jeu.(x).(!ny) <> (1 + (jeu.(x).(y) mod 2))) do c:= !c+1 ; if (jeu.(x).(!ny)=jeu.(x).(y)) then d:= !d+1 ; ny:= !ny-1 done;
 	if !c>=4 then !c + !d*3 else 0 ;;
 let evalposhoriz jeu x y =
 	let c = ref 0 and d = ref 0 and nx = ref x in
-	(* on compte d'abord à gauche*)
+	(* on compte d'abord Ã  gauche*)
 	while !nx>=0 && (jeu.(!nx).(y) <> (1 + (jeu.(x).(y) mod 2))) do c:= !c+1; if (jeu.(!nx).(y)=jeu.(x).(y)) then d:= !d+1 ; nx:= !nx-1 done;
-	(* puis à droite*)
+	(* puis Ã  droite*)
 	nx:= x+1 ;
 	while !nx<=6 && (jeu.(!nx).(y) <> (1 + (jeu.(x).(y) mod 2))) do c:= !c+1; if (jeu.(!nx).(y)=jeu.(x).(y)) then d:= !d+1 ; nx:= !nx+1 done;
 	if !c>=4 then !c + !d*3 else 0 ;;
 let evalposdiagHBGD jeu x y =
 	let c = ref 0 and d = ref 0 and nx = ref x and ny = ref y in
-	(* on compte d'abord à gauche*)
+	(* on compte d'abord Ã  gauche*)
 	while !nx>=0 && !ny<=5 && (jeu.(!nx).(!ny) <> (1 + (jeu.(x).(y) mod 2))) do c:= !c+1 ; if (jeu.(!nx).(!ny)=jeu.(x).(y)) then d:= !d+1 ; nx:= !nx-1; ny:= !ny+1 done;
-	(* puis à droite*)
+	(* puis Ã  droite*)
 	nx:= x+1 ;
 	ny:= y-1 ;
 	while !nx<=6 && !ny>=0 && (jeu.(!nx).(!ny) <> (1 + (jeu.(x).(y) mod 2))) do c:= !c+1 ; if (jeu.(!nx).(!ny)=jeu.(x).(y)) then d:= !d+1 ; nx:= !nx+1; ny:= !ny-1 done;
 	if !c>=4 then !c + !d*3 else 0 ;;
 let evalposdiagBHGD jeu x y =
 	let c = ref 0 and d = ref 0 and nx = ref x and ny = ref y in
-	(* on compte d'abord à gauche*)
+	(* on compte d'abord Ã  gauche*)
 	while !nx>=0 && !ny>=0 && (jeu.(!nx).(!ny) <> (1 + (jeu.(x).(y) mod 2))) do c:= !c+1 ; if (jeu.(!nx).(!ny)=jeu.(x).(y)) then d:= !d+1 ; nx:= !nx-1; ny:= !ny-1 done;
-	(* puis à droite*)
+	(* puis Ã  droite*)
 	nx:= x+1 ;
 	ny:= y+1 ;
 	while !nx<=6 && !ny<=5 && (jeu.(!nx).(!ny) <> (1 + (jeu.(x).(y) mod 2))) do c:= !c+1 ; if (jeu.(!nx).(!ny)=jeu.(x).(y)) then d:= !d+1 ; nx:= !nx+1; ny:= !ny+1 done;
@@ -257,15 +255,15 @@ let evalposdiagBHGD jeu x y =
 
 let evalueposition jeu n y =
 	let njeu = copiejeu jeu and res= ref 0 in
-	(*on fait ici plusieurs vérifications: le coup effectué permet-il à l'autre d'empêcher un puissance 4 (mauvais) ?
-	le coup effectué permet-il de lier efficacement un certain nombre de jeton ?*)
+	(*on fait ici plusieurs vÃ©rifications: le coup effectuÃ© permet-il Ã  l'autre d'empÃªcher un puissance 4 (mauvais) ?
+	le coup effectuÃ© permet-il de lier efficacement un certain nombre de jeton ?*)
 	if y <5 then (*si notre pion n'est pas tout en haut*)
 	begin
-		njeu.(n).(y+1)<-njeu.(n).(y); (*on place le pion au-dessus de là où on l'a mis*)
-		njeu.(n).(y)<-0; (* on enlève le pion là où on l'a mis (pour ne pas comptabiliser un puiss 4 vertical) *)
+		njeu.(n).(y+1)<-njeu.(n).(y); (*on place le pion au-dessus de lÃ  oÃ¹ on l'a mis*)
+		njeu.(n).(y)<-0; (* on enlÃ¨ve le pion lÃ  oÃ¹ on l'a mis (pour ne pas comptabiliser un puiss 4 vertical) *)
 		let l = list_length(verifpuiss4 njeu n (y+1)) in
 		if (l <> 0) then
-			res := -l * 5; (*on est en train d'offrir à l'autre la possibilité d'enlever notre puissance 4*)
+			res := -l * 5; (*on est en train d'offrir Ã  l'autre la possibilitÃ© d'enlever notre puissance 4*)
 	end ;
 	if !res = 0 then
 	res := (evalposvert jeu n y) + (evalposhoriz jeu n y) + (evalposdiagHBGD jeu n y) + (evalposdiagBHGD jeu n y);
@@ -304,25 +302,25 @@ let rec evaluecoup jeu meilleurcoupactuel n profondeur =
 				       profeval = 0 ;
 				      finpartie = false ;
 				     notefinale = 0 ;
-				   noteposition = 0} in (*on crée un coup complètement nul qui va servir de base pour avoir mieux*)
+				   noteposition = 0} in (*on crÃ©e un coup complÃ¨tement nul qui va servir de base pour avoir mieux*)
 		let meilleurcoupremonte = ref (remonteeval (-1) !meilleurcoupadverse valpos) and coup = ref !meilleurcoupadverse
 		and ordre = obtientordre() and a = ref 0 in
 			while (!a < 7)
 			do
 				coup:= (evaluecoup njeu !meilleurcoupadverse ordre.(!a) (profondeur-1)) ;
-				(*on vient d'évaluer le coup numéro a*)
-				(*si ce coup est meilleur (pour couleuradverse) que le précédent, alors l'adversaire le préfèrera*)
+				(*on vient d'Ã©valuer le coup numÃ©ro a*)
+				(*si ce coup est meilleur (pour couleuradverse) que le prÃ©cÃ©dent, alors l'adversaire le prÃ©fÃ¨rera*)
 				if (eststrictementmeilleurque (!coup) (!meilleurcoupadverse)) then
 				begin
 					meilleurcoupadverse:= !coup ;
 					meilleurcoupremonte:= (remonteeval n (!coup) valpos);
 					if (not (eststrictementmeilleurque (!meilleurcoupremonte) meilleurcoupactuel)) then
-						a:= 7  (*on quitte la boucle: cela ne sert à rien (on ne peut pas faire un meilleur coup qu'avant) *)
+						a:= 7  (*on quitte la boucle: cela ne sert Ã  rien (on ne peut pas faire un meilleur coup qu'avant) *)
 				end ;
 				a:= !a +1
 			done;
 			if not (!meilleurcoupremonte.couppossible) then
-				(*aucun des sous-coups n'est possible: il s'agit donc du dernier coup à jouer: on le joue !*)
+				(*aucun des sous-coups n'est possible: il s'agit donc du dernier coup Ã  jouer: on le joue !*)
 				meilleurcoupremonte:= {colonne = n; joueur=meilleurcoupactuel.joueur; couppossible=true; profeval=1; finpartie=true;notefinale=0;noteposition=valpos};
 			(!meilleurcoupremonte)
 			end
@@ -349,7 +347,7 @@ let ordijoue commenter jeu couleur =
 		commenter !lemeilleurcoup ;
 	 (!lemeilleurcoup).colonne ;;
 
-(*Le jeu lui-même*)
+(*Le jeu lui-mÃªme*)
 let jeu=jeuvide ();;
 let couleuractuelle=ref 2 ;;
 let fini=ref false;;
@@ -386,7 +384,7 @@ let copierjeu () =
 let nomcouleur couleur = match couleur with |1 -> "les rouges" |2->"les jaunes" | _ -> assert false ;;
 
 let commenter coup =
-	let texte = (ref ("Joué colonne " ^ string_of_int(1+coup.colonne))) in
+	let texte = (ref ("JouÃ© colonne " ^ string_of_int(1+coup.colonne))) in
 	if coup.finpartie then
 	begin
 		texte:= !texte ^ " - Fin de la partie dans " ^ string_of_int(coup.profeval-1) ^ " coup(s): " ;
@@ -416,10 +414,10 @@ let rec clicfleche n () =
 			if list_length(!l) <>0 then
 			begin
 				clignotercases !couleuractuelle !l ;
-				affichercommentaire ("Fin de la partie: " ^ (nomcouleur !couleuractuelle)^" ont gagné !") ;
+				affichercommentaire ("Fin de la partie: " ^ (nomcouleur !couleuractuelle)^" ont gagnÃ© !") ;
 				fini:=true
 			end
-			else if !i = 5 then (*on vérifie qu'il reste des cases vides*)
+			else if !i = 5 then (*on vÃ©rifie qu'il reste des cases vides*)
 			begin
 				l:=verifcasesvides jeu;
 				if list_length(!l) <> 0 then
@@ -435,10 +433,10 @@ let rec clicfleche n () =
 
 let jouer = (function ()->(if not !fini then begin affichercommentaire "" ; clicfleche (ordijoue commenter jeu !couleuractuelle) () end));;
 
-(*Liste des contrôles pour ce programme*)
+(*Liste des contrÃ´les pour ce programme*)
 let nctrl=ref 0;;
-let listectrl=make_vect 14 ctrlvide ;; (*la liste des contrôles*)
-let listetouches=make_vect 13 {lettre = char_of_int(27); appel=(function ()->(quitter:=true))} ;; (*la liste des touches*)
+let listectrl=make_vect 14 ctrlvide ;; (*la liste des contrÃ´les*)
+let listetouches=make_vect 13 {lettre = char_of_int(27); appel=(rien)} ;; (*la liste des touches*)
 listetouches.(1)<-{lettre=char_of_int(32) ; appel=(jouer)};;
 listetouches.(2)<-{lettre='p' ; appel=annulercoup};;
 listetouches.(3)<-{lettre='1' ; appel=(clicfleche 0)};;
@@ -448,9 +446,9 @@ listetouches.(6)<-{lettre='4' ; appel=(clicfleche 3)};;
 listetouches.(7)<-{lettre='5' ; appel=(clicfleche 4)};;
 listetouches.(8)<-{lettre='6' ; appel=(clicfleche 5)};;
 listetouches.(9)<-{lettre='7' ; appel=(clicfleche 6)};;
-(*la déclaration 10 est plus bas*)
+(*la dÃ©claration 10 est plus bas*)
 listetouches.(11)<-{lettre='c' ; appel=(copierjeu)};;
-(*la déclaration 12 est plus bas*)
+(*la dÃ©claration 12 est plus bas*)
 
 let ajoutectrl (ctrl:ctrl) = listectrl.(!nctrl)<-ctrl ; nctrl:= !nctrl+1 ;;
 
@@ -527,18 +525,18 @@ and dessinerctrl () =
 	ajouterctrlbouton "Utilisateur" (hcarac*3/2+esp) 5 (function ()->(joueurrouge:=0; dessinerjetonjoueurs ())) ;
 	ajouterctrlbouton "Ordinateur" (hcarac*3/2+esp) 6 (function ()->(joueurrouge:=1; dessinerjetonjoueurs ())) ;
 	ajouterctrlbouton "Jouer" 0 7 jouer ;
-	ajouterctrlbouton "Quitter" 0 8 (function ()->(quitter:=true)) ;
 	dessinerjetonjoueurs () ;;
 
 listetouches.(10)<-{lettre='n' ; appel=(function ()->(nouveaujeu();dessin()))};;
 listetouches.(12)<-{lettre='d' ; appel=(dessin)};;
 
-let puiss4 () =
-open_graph "" ;
+let puiss4 canvas =
+open_canvas canvas ;
 resize_window (larg+50) (haut+70+20) ;
 nouveaujeu() ;
 dessin() ;
-init (int_of_float (time())); (*initialisation de l'aléatoire*)
-affichercommentaire "Dernière mise à jour: 3 février 2024, code source: https://github.com/davdiv/puiss4";
+init (int_of_float (time())); (*initialisation de l'alÃ©atoire*)
+affichercommentaire "DerniÃ¨re mise Ã  jour: 3 fÃ©vrier 2024, code source: https://github.com/davdiv/puiss4";
 attend listectrl listetouches ;;
-puiss4 (); exit 0;;
+
+Js.export "puiss4" puiss4

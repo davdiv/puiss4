@@ -17,7 +17,7 @@
  (name puiss4)
  (synopsis "Puissance 4")
  (description "Jeu de Puissance 4")
- (depends ocaml dune graphics)
+ (depends ocaml dune graphics js_of_ocaml js_of_ocaml-ppx js_of_ocaml-lwt)
  (tags
   (topics "Puissance 4")))
 

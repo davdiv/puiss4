@@ -1,4 +1,10 @@
 (executable
- (public_name puiss4)
  (name puiss4)
- (libraries graphics))
+ (modes js)
+ (libraries js_of_ocaml-lwt.graphics)
+ (preprocess
+  (pps js_of_ocaml-ppx)))
+
+(alias
+ (name default)
+ (deps puiss4.bc.js index.html))

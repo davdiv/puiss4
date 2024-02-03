@@ -12,6 +12,9 @@ depends: [
   "ocaml"
   "dune" {>= "3.13"}
   "graphics"
+  "js_of_ocaml"
+  "js_of_ocaml-ppx"
+  "js_of_ocaml-lwt"
   "odoc" {with-doc}
 ]
 build: [
