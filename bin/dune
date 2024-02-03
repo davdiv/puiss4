@@ -1,0 +1,4 @@
+(executable
+ (public_name puiss4)
+ (name puiss4)
+ (libraries graphics))
